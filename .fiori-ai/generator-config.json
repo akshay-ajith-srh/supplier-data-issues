@@ -1,0 +1,29 @@
+{
+    "version": "0.2",
+    "floorplan": "FE_LROP",
+    "project": {
+        "name": "supplierdataissuesapp",
+        "targetFolder": "/home/user/projects/ai-created-cap",
+        "title": "AI generated App supplierdataissuesapp",
+        "description": "AI generated App supplierdataissuesapp",
+        "sapux": true
+    },
+    "service": {
+        "servicePath": "/odata/v4/supplier-data-issues-srv/",
+        "capService": {
+            "projectPath": "/home/user/projects/ai-created-cap",
+            "serviceName": "supplierDataIssuesSrv",
+            "serviceCdsPath": "srv/service"
+        }
+    },
+    "entityConfig": {
+        "mainEntity": {
+            "entityName": "DataIssues"
+        }
+    },
+    "projectTemplateType": "LIST_REPORT_OBJECT_PAGE",
+    "telemetryData": {
+        "generationSourceName": "AI Headless",
+        "generationSourceVersion": "1.34.0"
+    }
+}

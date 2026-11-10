@@ -1,0 +1,64 @@
+Build an SAP Fiori elements application for the following business requirements.
+
+Description
+As a supplier master data steward, I want a work list of data issues found in supplier addresses, so that each issue gets an owner, is checked against SAP S/4HANA and is closed only when the data is really correct.
+As an accounts payable clerk, I want to see the issues of a supplier and mark false alarms with a reason, so that real problems get fixed and false ones stop slowing down payments.
+
+Entities
+
+Data Issue: one problem found in one field of one supplier address by one check rule. The combination of BusinessPartner, AddressID, FieldName and RuleID is unique.
+1. IssueID: unique identifier.
+2. BusinessPartner: supplier number in SAP S/4HANA (text).
+3. AddressID: number of the supplier's address (text).
+4. FieldName: the address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country.
+5. RuleID: short code of the check rule, for example POSTAL_FORMAT or STREET_MISSING.
+6. RuleDescription: what the rule checks, in one sentence.
+7. Severity: High, Medium or Low.
+8. Status: Open, In Progress, Fixed or False Alarm. New issues start as Open.
+9. Owner: user responsible for the issue.
+10. CurrentValue: the value of the field at the last check.
+11. LastCheckedAt: date and time of the last check.
+12. FalseAlarmReason: free text; required when the status is False Alarm.
+13. QuestionText: the question to send to the supplier about this issue.
+14. AIAssisted: yes/no; whether the question started from an AI draft.
+
+Supplier Address: an address of a supplier as stored in SAP S/4HANA. Use exactly these field names, because they match the SAP S/4HANA Business Partner API (A_BusinessPartnerAddress); later the data will be read from that API. Each data issue belongs to one supplier address.
+1. BusinessPartner: key together with AddressID.
+2. AddressID: key together with BusinessPartner.
+3. StreetName
+4. HouseNumber
+5. PostalCode
+6. CityName
+7. Country: two-letter ISO country code.
+
+Sample data: fictional only. About 6 supplier addresses in DE, FR, NL, ES, US and JP, and about 12 data issues on them, for example postal codes in the wrong format for their country, a missing street and a missing house number. Use every status and every severity at least once, and include one False Alarm with its reason.
+
+Acceptance criteria
+1. Given I am logged in as a data steward, when I open the app, then I see a list of data issues showing BusinessPartner, FieldName, RuleID, Severity, Status, Owner and LastCheckedAt, and I can filter by Status, Severity, Owner, RuleID and the Country of the address.
+2. Given I select an issue, when its detail page opens, then I see the issue, the supplier address and the question to the supplier in separate tabs.
+3. Given an issue has no owner, when someone sets its status to In Progress, then the change is refused with a message asking for an owner.
+4. Given I set an issue to False Alarm, when the reason is empty, then it is not saved and I am asked for a reason.
+5. Given an issue is open, when a user tries to set the status to Fixed by hand, then it is refused; only a Recheck that finds the field now passes its rule may set Fixed.
+6. Given I import a findings table, when an issue with the same BusinessPartner, AddressID, FieldName and RuleID already exists, then that issue is updated and not created twice.
+
+The issue details will be:
+
+Field Name | Tab in App | Section or Field Group
+IssueID | Issue | Issue Details
+BusinessPartner | Issue | Issue Details
+AddressID | Issue | Issue Details
+FieldName | Issue | Issue Details
+RuleID | Issue | Rule
+RuleDescription | Issue | Rule
+Severity | Issue | Status and Owner
+Status | Issue | Status and Owner
+Owner | Issue | Status and Owner
+FalseAlarmReason | Issue | Status and Owner
+CurrentValue | Issue | Last Check
+LastCheckedAt | Issue | Last Check
+StreetName | Address in S/4HANA | Address
+HouseNumber | Address in S/4HANA | Address
+PostalCode | Address in S/4HANA | Address
+CityName | Address in S/4HANA | Address
+Country | Address in S/4HANA | Address
+QuestionText | Question to Supplier | Question

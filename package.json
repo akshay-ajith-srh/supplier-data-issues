@@ -1,0 +1,34 @@
+{
+  "name": "ai-created-cap",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@sap-cloud-sdk/connectivity": "^4.10.0",
+    "@sap-cloud-sdk/http-client": "^4.10.0",
+    "@sap-cloud-sdk/resilience": "^4.10.0",
+    "@sap/cds": "^10"
+  },
+  "devDependencies": {
+    "@cap-js/sqlite": "^3",
+    "cds-plugin-ui5": "^0.17.0"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "watch-supplierdataissuesapp": "cds watch --open supplierdataissuesapp/index.html?sap-ui-xx-viewCache=false --livereload false"
+  },
+  "private": true,
+  "workspaces": [
+    "app/*"
+  ],
+  "sapux": [
+    "app/supplierdataissuesapp"
+  ],
+  "cds": {
+    "requires": {
+      "API_BUSINESS_PARTNER": {
+        "kind": "odata-v2",
+        "model": "srv/external/API_BUSINESS_PARTNER"
+      }
+    }
+  }
+}

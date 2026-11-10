@@ -1,0 +1,1608 @@
+2026-11-09T23:37:29.779Z [info] Project generation uses model: "gpt-4.1-mini", version: "latest"
+2026-11-09T23:37:29.780Z [info] 1/8: Generate CAP model using LLM
+2026-11-09T23:37:32.935Z [info] 
+==========LLM call for step "extractAppSkeleton":==========
+You help the user building a Fiori Elements application described in the user input.
+
+A Fiori Elements application typically starts with a ListReport page showing the data of the base entity of the application in a table.
+Details of a specific table row are shown in the ObjectPage. This first ObjectPage is therefore based on the base entity of the application.
+An ObjectPage can contain one or more table sections based on to-many associations of its entity type.
+The details of a table section row can be shown in an another ObjectPage based on the associations target entity.
+
+Your task is to find the entities (with their to-many associations) as well as the ObjectPages (with the to-many associations they use in table sections) described in the user input below.
+
+You must format your output as a JSON value that adheres to a given "JSON Schema" instance.
+
+"JSON Schema" is a declarative language that allows you to annotate and validate JSON documents.
+
+For example, the example "JSON Schema" instance {{"properties": {{"foo": {{"description": "a list of test words", "type": "array", "items": {{"type": "string"}}}}}}, "required": ["foo"]}}
+would match an object with one required property, "foo". The "type" property specifies "foo" must be an "array", and the "description" property semantically describes it as "a list of test words". The items within "foo" must be strings.
+Thus, the object {{"foo": ["bar", "baz"]}} is a well-formatted instance of this example "JSON Schema". The object {{"properties": {{"foo": ["bar", "baz"]}}}} is not well-formatted.
+
+Your output will be parsed and type-checked according to the provided schema instance, so make sure all fields in your output match the schema exactly and there are no trailing commas!
+
+Here is the JSON Schema instance your output must adhere to. Include the enclosing markdown codeblock:
+```json
+{
+  "type": "object",
+  "properties": {
+    "entities": {
+      "type": "array",
+      "description": "Define all entities and their to-many associations; entity properties will be determined later",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "UpperCamelCase, no spaces, plural, e.g. 'Orders'"
+          },
+          "label": {
+            "type": "string",
+            "description": "max two words, singular"
+          },
+          "associations": {
+            "type": "array",
+            "description": "Define to-many associations between entities",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "Points to existing entity, value is entities.name"
+                },
+                "nameForReverseAssociation": {
+                  "type": "string",
+                  "description": "Name of the reverse to-one association in the target entity; required if target entity is same as source entity"
+                },
+                "multiplicity": {
+                  "type": "string",
+                  "enum": [
+                    "many",
+                    "one"
+                  ],
+                  "description": "Cardinality of the association"
+                }
+              },
+              "required": [
+                "name",
+                "target",
+                "multiplicity"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "labelPlural": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "associations",
+          "labelPlural"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "baseEntity": {
+      "type": "string",
+      "description": "base entity of ListReport page (if present) and first ObjectPage"
+    },
+    "noListReportPage": {
+      "type": "boolean",
+      "description": "true: no ListReport page will generated, e.g. for applications which start with an (input enabled) Object Page to enter data"
+    },
+    "objectPages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entityType": {
+            "type": "string",
+            "description": "Entity that the ObjectPage is based on, the first ObjectPage is always based on base entity. There can at most be a single ObjectPage per entityType"
+          },
+          "tableSectionsAssociations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "to-many associations of page entity for table sections shown in the ObjectPage"
+          }
+        },
+        "required": [
+          "entityType"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "namespace": {
+      "type": "string",
+      "description": "lowerCamelCase, no spaces allowed"
+    },
+    "applicationName": {
+      "type": "string",
+      "description": "lowerCamelCase, no spaces allowed"
+    },
+    "userInputKind": {
+      "enum": [
+        "UserInterfaceFirst",
+        "DataModelFirst"
+      ],
+      "description": "use 'UserInterfaceFirst' if User input describes the app based on the user interface, i.e. how List Report and Object Pages should look like; use 'DataModelFirst' if User input describes the app based on its data model, i.e. its entities, their elements and associations"
+    }
+  },
+  "required": [
+    "entities",
+    "baseEntity",
+    "objectPages",
+    "namespace",
+    "applicationName",
+    "userInputKind"
+  ],
+  "additionalProperties": false
+}
+```
+
+Output ONLY the json contents and try to be as accurate as comprehensive as possible.
+
+<UserInput>
+Build an SAP Fiori elements application for the following business requirements.
+
+Description
+As a supplier master data steward, I want a work list of data issues found in supplier addresses, so that each issue gets an owner, is checked against SAP S/4HANA and is closed only when the data is really correct.
+As an accounts payable clerk, I want to see the issues of a supplier and mark false alarms with a reason, so that real problems get fixed and false ones stop slowing down payments.
+
+Entities
+
+Data Issue: one problem found in one field of one supplier address by one check rule. The combination of BusinessPartner, AddressID, FieldName and RuleID is unique.
+1. IssueID: unique identifier.
+2. BusinessPartner: supplier number in SAP S/4HANA (text).
+3. AddressID: number of the supplier's address (text).
+4. FieldName: the address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country.
+5. RuleID: short code of the check rule, for example POSTAL_FORMAT or STREET_MISSING.
+6. RuleDescription: what the rule checks, in one sentence.
+7. Severity: High, Medium or Low.
+8. Status: Open, In Progress, Fixed or False Alarm. New issues start as Open.
+9. Owner: user responsible for the issue.
+10. CurrentValue: the value of the field at the last check.
+11. LastCheckedAt: date and time of the last check.
+12. FalseAlarmReason: free text; required when the status is False Alarm.
+13. QuestionText: the question to send to the supplier about this issue.
+14. AIAssisted: yes/no; whether the question started from an AI draft.
+
+Supplier Address: an address of a supplier as stored in SAP S/4HANA. Use exactly these field names, because they match the SAP S/4HANA Business Partner API (A_BusinessPartnerAddress); later the data will be read from that API. Each data issue belongs to one supplier address.
+1. BusinessPartner: key together with AddressID.
+2. AddressID: key together with BusinessPartner.
+3. StreetName
+4. HouseNumber
+5. PostalCode
+6. CityName
+7. Country: two-letter ISO country code.
+
+Sample data: fictional only. About 6 supplier addresses in DE, FR, NL, ES, US and JP, and about 12 data issues on them, for example postal codes in the wrong format for their country, a missing street and a missing house number. Use every status and every severity at least once, and include one False Alarm with its reason.
+
+Acceptance criteria
+1. Given I am logged in as a data steward, when I open the app, then I see a list of data issues showing BusinessPartner, FieldName, RuleID, Severity, Status, Owner and LastCheckedAt, and I can filter by Status, Severity, Owner, RuleID and the Country of the address.
+2. Given I select an issue, when its detail page opens, then I see the issue, the supplier address and the question to the supplier in separate tabs.
+3. Given an issue has no owner, when someone sets its status to In Progress, then the change is refused with a message asking for an owner.
+4. Given I set an issue to False Alarm, when the reason is empty, then it is not saved and I am asked for a reason.
+5. Given an issue is open, when a user tries to set the status to Fixed by hand, then it is refused; only a Recheck that finds the field now passes its rule may set Fixed.
+6. Given I import a findings table, when an issue with the same BusinessPartner, AddressID, FieldName and RuleID already exists, then that issue is updated and not created twice.
+
+The issue details will be:
+
+Field Name | Tab in App | Section or Field Group
+IssueID | Issue | Issue Details
+BusinessPartner | Issue | Issue Details
+AddressID | Issue | Issue Details
+FieldName | Issue | Issue Details
+RuleID | Issue | Rule
+RuleDescription | Issue | Rule
+Severity | Issue | Status and Owner
+Status | Issue | Status and Owner
+Owner | Issue | Status and Owner
+FalseAlarmReason | Issue | Status and Owner
+CurrentValue | Issue | Last Check
+LastCheckedAt | Issue | Last Check
+StreetName | Address in S/4HANA | Address
+HouseNumber | Address in S/4HANA | Address
+PostalCode | Address in S/4HANA | Address
+CityName | Address in S/4HANA | Address
+Country | Address in S/4HANA | Address
+QuestionText | Question to Supplier | Question
+</UserInput>
+
+----------Response:----------
+```json
+{
+  "entities": [
+    {
+      "name": "DataIssues",
+      "label": "Issue",
+      "labelPlural": "Issues",
+      "associations": [
+        {
+          "name": "SupplierAddresses",
+          "target": "SupplierAddresses",
+          "multiplicity": "one"
+        }
+      ]
+    },
+    {
+      "name": "SupplierAddresses",
+      "label": "Address",
+      "labelPlural": "Addresses",
+      "associations": [
+        {
+          "name": "DataIssues",
+          "target": "DataIssues",
+          "nameForReverseAssociation": "SupplierAddresses",
+          "multiplicity": "many"
+        }
+      ]
+    }
+  ],
+  "baseEntity": "DataIssues",
+  "noListReportPage": false,
+  "objectPages": [
+    {
+      "entityType": "DataIssues",
+      "tableSectionsAssociations": []
+    },
+    {
+      "entityType": "SupplierAddresses",
+      "tableSectionsAssociations": [
+        "DataIssues"
+      ]
+    }
+  ],
+  "namespace": "supplierDataIssues",
+  "applicationName": "supplierDataIssuesApp",
+  "userInputKind": "UserInterfaceFirst"
+}
+```
+2026-11-09T23:37:32.938Z [info] Step "switchBasedOnAppSkeleton": case 0 blocked! Evaluation details:
+ - JSONPath "$.model.applications[0].pages[0]" : [{"type":"ListReport","entityType":"DataIssues"}]
+2026-11-09T23:37:32.938Z [info] Step "switchBasedOnAppSkeleton": case 1 blocked! Evaluation details:
+ - JSONPath "$.model.applications[0].pages[0].type" : ["ListReport"]
+2026-11-09T23:37:32.938Z [info] Step "switchBasedOnAppSkeleton": case 2 passed! Evaluation details:
+ - JSONPath "$.userInput.imageCount" : [0]
+2026-11-09T23:37:32.938Z [info] Step "runDataModelFirst": workflow "givenSkeletonExtractDataModelFirst" started
+"
+2026-11-09T23:37:44.866Z [info] 
+==========LLM call for step "extractEntitiesProperties":==========
+You help the user refining the DataModel for a Fiori Elements application described in the user input.
+
+The DataModel consists of the following entities and associations:
+- entity "DataIssues" (with to-one association to "SupplierAddresses")
+- entity "SupplierAddresses" (with to-many associations to "DataIssues")
+
+Your task is to find the properties for each entity.
+
+You must format your output as a JSON value that adheres to a given "JSON Schema" instance.
+
+"JSON Schema" is a declarative language that allows you to annotate and validate JSON documents.
+
+For example, the example "JSON Schema" instance {{"properties": {{"foo": {{"description": "a list of test words", "type": "array", "items": {{"type": "string"}}}}}}, "required": ["foo"]}}
+would match an object with one required property, "foo". The "type" property specifies "foo" must be an "array", and the "description" property semantically describes it as "a list of test words". The items within "foo" must be strings.
+Thus, the object {{"foo": ["bar", "baz"]}} is a well-formatted instance of this example "JSON Schema". The object {{"properties": {{"foo": ["bar", "baz"]}}}} is not well-formatted.
+
+Your output will be parsed and type-checked according to the provided schema instance, so make sure all fields in your output match the schema exactly and there are no trailing commas!
+
+Here is the JSON Schema instance your output must adhere to. Include the enclosing markdown codeblock:
+```json
+{
+  "type": "object",
+  "properties": {
+    "elements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entityName": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "camelCase for CAP and strict PascalCase for RAP, no spaces"
+          },
+          "type": {
+            "type": "string",
+            "description": "Allowed values: String(50), Boolean, Integer, Decimal, Double, Date, Time, DateTime, Timestamp; String length can vary - i.e. String(20)"
+          },
+          "key": {
+            "type": "boolean",
+            "description": "max. one optional key per entity, only if this element is a semantic key and can uniquely identify the instance"
+          },
+          "isAmount": {
+            "type": "boolean",
+            "description": "true if element has semantic type amount or price"
+          },
+          "isQuantity": {
+            "type": "boolean",
+            "description": "Set to true only if the element represents a measurable quantity that requires or can have a unit of measure (e.g., weight, length, duration). Do not use for simple integer counts"
+          },
+          "essentialElement": {
+            "type": "boolean",
+            "description": "'true' only if element is marked as essential'"
+          },
+          "additionalInfo": {
+            "type": "string",
+            "description": "All additional information from user input, e.g. user description, example values; also consider referenced parts in the user input"
+          }
+        },
+        "required": [
+          "entityName",
+          "name",
+          "type",
+          "additionalInfo"
+        ],
+        "additionalProperties": false
+      },
+      "description": "At least 5 realistic elements (unless explicitly specified)"
+    }
+  },
+  "required": [
+    "elements"
+  ],
+  "additionalProperties": false
+}
+```
+
+Output ONLY the json contents and try to be as accurate as comprehensive as possible.
+
+<UserInput>
+Build an SAP Fiori elements application for the following business requirements.
+
+Description
+As a supplier master data steward, I want a work list of data issues found in supplier addresses, so that each issue gets an owner, is checked against SAP S/4HANA and is closed only when the data is really correct.
+As an accounts payable clerk, I want to see the issues of a supplier and mark false alarms with a reason, so that real problems get fixed and false ones stop slowing down payments.
+
+Entities
+
+Data Issue: one problem found in one field of one supplier address by one check rule. The combination of BusinessPartner, AddressID, FieldName and RuleID is unique.
+1. IssueID: unique identifier.
+2. BusinessPartner: supplier number in SAP S/4HANA (text).
+3. AddressID: number of the supplier's address (text).
+4. FieldName: the address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country.
+5. RuleID: short code of the check rule, for example POSTAL_FORMAT or STREET_MISSING.
+6. RuleDescription: what the rule checks, in one sentence.
+7. Severity: High, Medium or Low.
+8. Status: Open, In Progress, Fixed or False Alarm. New issues start as Open.
+9. Owner: user responsible for the issue.
+10. CurrentValue: the value of the field at the last check.
+11. LastCheckedAt: date and time of the last check.
+12. FalseAlarmReason: free text; required when the status is False Alarm.
+13. QuestionText: the question to send to the supplier about this issue.
+14. AIAssisted: yes/no; whether the question started from an AI draft.
+
+Supplier Address: an address of a supplier as stored in SAP S/4HANA. Use exactly these field names, because they match the SAP S/4HANA Business Partner API (A_BusinessPartnerAddress); later the data will be read from that API. Each data issue belongs to one supplier address.
+1. BusinessPartner: key together with AddressID.
+2. AddressID: key together with BusinessPartner.
+3. StreetName
+4. HouseNumber
+5. PostalCode
+6. CityName
+7. Country: two-letter ISO country code.
+
+Sample data: fictional only. About 6 supplier addresses in DE, FR, NL, ES, US and JP, and about 12 data issues on them, for example postal codes in the wrong format for their country, a missing street and a missing house number. Use every status and every severity at least once, and include one False Alarm with its reason.
+
+Acceptance criteria
+1. Given I am logged in as a data steward, when I open the app, then I see a list of data issues showing BusinessPartner, FieldName, RuleID, Severity, Status, Owner and LastCheckedAt, and I can filter by Status, Severity, Owner, RuleID and the Country of the address.
+2. Given I select an issue, when its detail page opens, then I see the issue, the supplier address and the question to the supplier in separate tabs.
+3. Given an issue has no owner, when someone sets its status to In Progress, then the change is refused with a message asking for an owner.
+4. Given I set an issue to False Alarm, when the reason is empty, then it is not saved and I am asked for a reason.
+5. Given an issue is open, when a user tries to set the status to Fixed by hand, then it is refused; only a Recheck that finds the field now passes its rule may set Fixed.
+6. Given I import a findings table, when an issue with the same BusinessPartner, AddressID, FieldName and RuleID already exists, then that issue is updated and not created twice.
+
+The issue details will be:
+
+Field Name | Tab in App | Section or Field Group
+IssueID | Issue | Issue Details
+BusinessPartner | Issue | Issue Details
+AddressID | Issue | Issue Details
+FieldName | Issue | Issue Details
+RuleID | Issue | Rule
+RuleDescription | Issue | Rule
+Severity | Issue | Status and Owner
+Status | Issue | Status and Owner
+Owner | Issue | Status and Owner
+FalseAlarmReason | Issue | Status and Owner
+CurrentValue | Issue | Last Check
+LastCheckedAt | Issue | Last Check
+StreetName | Address in S/4HANA | Address
+HouseNumber | Address in S/4HANA | Address
+PostalCode | Address in S/4HANA | Address
+CityName | Address in S/4HANA | Address
+Country | Address in S/4HANA | Address
+QuestionText | Question to Supplier | Question
+</UserInput>
+
+----------Response:----------
+```json
+{
+  "elements": [
+    {
+      "entityName": "DataIssues",
+      "name": "issueID",
+      "type": "String(50)",
+      "key": true,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Unique identifier of the data issue"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "businessPartner",
+      "type": "String(20)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Supplier number in SAP S/4HANA"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "addressID",
+      "type": "String(10)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Number of the supplier's address"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "fieldName",
+      "type": "String(20)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "ruleID",
+      "type": "String(30)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Short code of the check rule, e.g. POSTAL_FORMAT or STREET_MISSING"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "ruleDescription",
+      "type": "String(200)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": false,
+      "additionalInfo": "Description of what the rule checks, in one sentence"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "severity",
+      "type": "String(10)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Severity level: High, Medium or Low"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "status",
+      "type": "String(20)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Status of the issue: Open, In Progress, Fixed or False Alarm"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "owner",
+      "type": "String(50)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": false,
+      "additionalInfo": "User responsible for the issue"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "currentValue",
+      "type": "String(100)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": false,
+      "additionalInfo": "Value of the field at the last check"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "lastCheckedAt",
+      "type": "DateTime",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Date and time of the last check"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "falseAlarmReason",
+      "type": "String(200)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": false,
+      "additionalInfo": "Free text reason required when status is False Alarm"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "questionText",
+      "type": "String(500)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": false,
+      "additionalInfo": "Question to send to the supplier about this issue"
+    },
+    {
+      "entityName": "DataIssues",
+      "name": "aiAssisted",
+      "type": "Boolean",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": false,
+      "additionalInfo": "Whether the question started from an AI draft (yes/no)"
+    },
+    {
+      "entityName": "SupplierAddresses",
+      "name": "businessPartner",
+      "type": "String(20)",
+      "key": true,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Supplier number in SAP S/4HANA, key together with AddressID"
+    },
+    {
+      "entityName": "SupplierAddresses",
+      "name": "addressID",
+      "type": "String(10)",
+      "key": true,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Number of the supplier's address, key together with BusinessPartner"
+    },
+    {
+      "entityName": "SupplierAddresses",
+      "name": "streetName",
+      "type": "String(100)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Street name as stored in SAP S/4HANA Business Partner API"
+    },
+    {
+      "entityName": "SupplierAddresses",
+      "name": "houseNumber",
+      "type": "String(20)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "House number as stored in SAP S/4HANA Business Partner API"
+    },
+    {
+      "entityName": "SupplierAddresses",
+      "name": "postalCode",
+      "type": "String(20)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Postal code as stored in SAP S/4HANA Business Partner API"
+    },
+    {
+      "entityName": "SupplierAddresses",
+      "name": "cityName",
+      "type": "String(50)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "City name as stored in SAP S/4HANA Business Partner API"
+    },
+    {
+      "entityName": "SupplierAddresses",
+      "name": "country",
+      "type": "String(2)",
+      "key": false,
+      "isAmount": false,
+      "isQuantity": false,
+      "essentialElement": true,
+      "additionalInfo": "Two-letter ISO country code as stored in SAP S/4HANA Business Partner API"
+    }
+  ]
+}
+```
+2026-11-09T23:37:55.713Z [info] 
+==========LLM call for step "extractPropertyDetails":==========
+Here is a list of property names, each with the property description that was extracted from previous user input:
+
+DataIssues_issueID: Unique identifier of the data issue
+DataIssues_businessPartner: Supplier number in SAP S/4HANA
+DataIssues_addressID: Number of the supplier's address
+DataIssues_fieldName: Address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country
+DataIssues_ruleID: Short code of the check rule, e.g. POSTAL_FORMAT or STREET_MISSING
+DataIssues_ruleDescription: Description of what the rule checks, in one sentence
+DataIssues_severity: Severity level: High, Medium or Low
+DataIssues_status: Status of the issue: Open, In Progress, Fixed or False Alarm
+DataIssues_owner: User responsible for the issue
+DataIssues_currentValue: Value of the field at the last check
+DataIssues_lastCheckedAt: Date and time of the last check
+DataIssues_falseAlarmReason: Free text reason required when status is False Alarm
+DataIssues_questionText: Question to send to the supplier about this issue
+DataIssues_aiAssisted: Whether the question started from an AI draft (yes/no)
+SupplierAddresses_businessPartner: Supplier number in SAP S/4HANA, key together with AddressID
+SupplierAddresses_addressID: Number of the supplier's address, key together with BusinessPartner
+SupplierAddresses_streetName: Street name as stored in SAP S/4HANA Business Partner API
+SupplierAddresses_houseNumber: House number as stored in SAP S/4HANA Business Partner API
+SupplierAddresses_postalCode: Postal code as stored in SAP S/4HANA Business Partner API
+SupplierAddresses_cityName: City name as stored in SAP S/4HANA Business Partner API
+SupplierAddresses_country: Two-letter ISO country code as stored in SAP S/4HANA Business Partner API
+
+For each property analyze the description with respect to what property values can be expected.
+
+You must format your output as a JSON value that adheres to a given "JSON Schema" instance.
+
+"JSON Schema" is a declarative language that allows you to annotate and validate JSON documents.
+
+For example, the example "JSON Schema" instance {{"properties": {{"foo": {{"description": "a list of test words", "type": "array", "items": {{"type": "string"}}}}}}, "required": ["foo"]}}
+would match an object with one required property, "foo". The "type" property specifies "foo" must be an "array", and the "description" property semantically describes it as "a list of test words". The items within "foo" must be strings.
+Thus, the object {{"foo": ["bar", "baz"]}} is a well-formatted instance of this example "JSON Schema". The object {{"properties": {{"foo": ["bar", "baz"]}}}} is not well-formatted.
+
+Your output will be parsed and type-checked according to the provided schema instance, so make sure all fields in your output match the schema exactly and there are no trailing commas!
+
+Here is the JSON Schema instance your output must adhere to. Include the enclosing markdown codeblock:
+```json
+{
+  "type": "object",
+  "properties": {
+    "properties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "camelCase for CAP and strict PascalCase for RAP, no spaces"
+          },
+          "hasFixedValuesList": {
+            "type": "boolean",
+            "description": "Only limited list of values expected, e.g. property is representing e.g. a type, status, category, unit, organization"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Specific property values mentioned as part of the description. Those could be possible values or example values. Don't make up or invent any values"
+          },
+          "isAmount": {
+            "type": "boolean",
+            "description": "true if element has semantic type amount or price"
+          },
+          "isQuantity": {
+            "type": "boolean",
+            "description": "Set to true only if the element represents a measurable quantity that requires or can have a unit of measure (e.g., weight, length, duration). Do not use for simple integer counts"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "properties"
+  ],
+  "additionalProperties": false
+}
+```
+
+Output ONLY the json contents and try to be as accurate as comprehensive as possible.
+
+----------Response:----------
+```json
+{
+  "properties": [
+    {
+      "name": "dataIssues_issueID",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_businessPartner",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_addressID",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_fieldName",
+      "hasFixedValuesList": true,
+      "values": [
+        "StreetName",
+        "HouseNumber",
+        "PostalCode",
+        "CityName",
+        "Country"
+      ],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_ruleID",
+      "hasFixedValuesList": false,
+      "values": [
+        "POSTAL_FORMAT",
+        "STREET_MISSING"
+      ],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_ruleDescription",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_severity",
+      "hasFixedValuesList": true,
+      "values": [
+        "High",
+        "Medium",
+        "Low"
+      ],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_status",
+      "hasFixedValuesList": true,
+      "values": [
+        "Open",
+        "In Progress",
+        "Fixed",
+        "False Alarm"
+      ],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_owner",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_currentValue",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_lastCheckedAt",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_falseAlarmReason",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_questionText",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "dataIssues_aiAssisted",
+      "hasFixedValuesList": true,
+      "values": [
+        "yes",
+        "no"
+      ],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "supplierAddresses_businessPartner",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "supplierAddresses_addressID",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "supplierAddresses_streetName",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "supplierAddresses_houseNumber",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "supplierAddresses_postalCode",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "supplierAddresses_cityName",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    },
+    {
+      "name": "supplierAddresses_country",
+      "hasFixedValuesList": false,
+      "values": [],
+      "isAmount": false,
+      "isQuantity": false
+    }
+  ]
+}
+```
+2026-11-09T23:37:55.714Z [info] Step "switchSimpleOrComplexApp": case 0 blocked! Evaluation details:
+ - JSONPath "$.model.applications[0].pages[2]" : []
+ - JSONPath "$.userInput.lineCount" : [76]
+2026-11-09T23:37:55.714Z [info] Step "switchSimpleOrComplexApp": no condition met - running default steps
+2026-11-09T23:37:55.714Z [info] Step "runFlowForComplexApp": workflow "givenSkeletonExtractComplexApp" started
+"
+2026-11-09T23:38:06.729Z [info] 
+==========LLM call for classifier:==========
+The user input below describes a Fiori Elements application with a ListReport page and multiple ObjectPages.
+ListReport page shows the data of the specific business object as a list or table. ObjectPage shows details of a specific business object instance.
+Your task is to classify the lines based on the same business object representation to the following categories, one line can refer only to a single category:
+ - LIST_REPORT_DATAISSUES: line describes the ListReport page for "DataIssues"
+ - OBJECT_PAGE_DATAISSUES: line describes the ObjectPage for "DataIssues"
+ - NONE: line is not describing any ListReport page or ObjectPage
+
+Return your findings as csv file with columns "lineContent" and "category"!
+
+<UserInput>
+Build an SAP Fiori elements application for the following business requirements.
+
+Description
+As a supplier master data steward, I want a work list of data issues found in supplier addresses, so that each issue gets an owner, is checked against SAP S/4HANA and is closed only when the data is really correct.
+As an accounts payable clerk, I want to see the issues of a supplier and mark false alarms with a reason, so that real problems get fixed and false ones stop slowing down payments.
+
+Entities
+
+Data Issue: one problem found in one field of one supplier address by one check rule.
+The combination of BusinessPartner, AddressID, FieldName and RuleID is unique.
+1. IssueID: unique identifier.
+2. BusinessPartner: supplier number in SAP S/4HANA (text).
+3. AddressID: number of the supplier's address (text).
+4.
+FieldName: the address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country.
+5. RuleID: short code of the check rule, for example POSTAL_FORMAT or STREET_MISSING.
+6. RuleDescription: what the rule checks, in one sentence.
+7. Severity: High, Medium or Low.
+8. Status: Open, In Progress, Fixed or False Alarm. New issues start as Open.
+9. Owner: user responsible for the issue.
+10. CurrentValue: the value of the field at the last check.
+11. LastCheckedAt: date and time of the last check.
+12. FalseAlarmReason: free text; required when the status is False Alarm.
+13. QuestionText: the question to send to the supplier about this issue.
+14. AIAssisted: yes/no; whether the question started from an AI draft.
+
+Supplier Address: an address of a supplier as stored in SAP S/4HANA.
+Use exactly these field names, because they match the SAP S/4HANA Business Partner API (A_BusinessPartnerAddress); later the data will be read from that API.
+Each data issue belongs to one supplier address.
+1. BusinessPartner: key together with AddressID.
+2. AddressID: key together with BusinessPartner.
+3. StreetName
+4. HouseNumber
+5. PostalCode
+6. CityName
+7. Country: two-letter ISO country code.
+
+Sample data: fictional only.
+About 6 supplier addresses in DE, FR, NL, ES, US and JP, and about 12 data issues on them, for example postal codes in the wrong format for their country, a missing street and a missing house number.
+Use every status and every severity at least once, and include one False Alarm with its reason.
+
+Acceptance criteria
+1.
+Given I am logged in as a data steward, when I open the app, then I see a list of data issues showing BusinessPartner, FieldName, RuleID, Severity, Status, Owner and LastCheckedAt, and I can filter by Status, Severity, Owner, RuleID and the Country of the address.
+2.
+Given I select an issue, when its detail page opens, then I see the issue, the supplier address and the question to the supplier in separate tabs.
+3.
+Given an issue has no owner, when someone sets its status to In Progress, then the change is refused with a message asking for an owner.
+4.
+Given I set an issue to False Alarm, when the reason is empty, then it is not saved and I am asked for a reason.
+5.
+Given an issue is open, when a user tries to set the status to Fixed by hand, then it is refused; only a Recheck that finds the field now passes its rule may set Fixed.
+6.
+Given I import a findings table, when an issue with the same BusinessPartner, AddressID, FieldName and RuleID already exists, then that issue is updated and not created twice.
+
+The issue details will be:
+
+Field Name | Tab in App | Section or Field Group
+IssueID | Issue | Issue Details
+BusinessPartner | Issue | Issue Details
+AddressID | Issue | Issue Details
+FieldName | Issue | Issue Details
+RuleID | Issue | Rule
+RuleDescription | Issue | Rule
+Severity | Issue | Status and Owner
+Status | Issue | Status and Owner
+Owner | Issue | Status and Owner
+FalseAlarmReason | Issue | Status and Owner
+CurrentValue | Issue | Last Check
+LastCheckedAt | Issue | Last Check
+StreetName | Address in S/4HANA | Address
+HouseNumber | Address in S/4HANA | Address
+PostalCode | Address in S/4HANA | Address
+CityName | Address in S/4HANA | Address
+Country | Address in S/4HANA | Address
+QuestionText | Question to Supplier | Question
+</UserInput>
+
+----------Response:----------
+```csv
+lineContent,category
+"Build an SAP Fiori elements application for the following business requirements.",NONE
+"Description",NONE
+"As a supplier master data steward, I want a work list of data issues found in supplier addresses, so that each issue gets an owner, is checked against SAP S/4HANA and is closed only when the data is really correct.",LIST_REPORT_DATAISSUES
+"As an accounts payable clerk, I want to see the issues of a supplier and mark false alarms with a reason, so that real problems get fixed and false ones stop slowing down payments.",OBJECT_PAGE_DATAISSUES
+"Entities",NONE
+"Data Issue: one problem found in one field of one supplier address by one check rule.",NONE
+"The combination of BusinessPartner, AddressID, FieldName and RuleID is unique.",NONE
+"1. IssueID: unique identifier.",NONE
+"2. BusinessPartner: supplier number in SAP S/4HANA (text).",NONE
+"3. AddressID: number of the supplier's address (text).",NONE
+"4.",NONE
+"FieldName: the address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country.",NONE
+"5. RuleID: short code of the check rule, for example POSTAL_FORMAT or STREET_MISSING.",NONE
+"6. RuleDescription: what the rule checks, in one sentence.",NONE
+"7. Severity: High, Medium or Low.",NONE
+"8. Status: Open, In Progress, Fixed or False Alarm. New issues start as Open.",NONE
+"9. Owner: user responsible for the issue.",NONE
+"10. CurrentValue: the value of the field at the last check.",NONE
+"11. LastCheckedAt: date and time of the last check.",NONE
+"12. FalseAlarmReason: free text; required when the status is False Alarm.",NONE
+"13. QuestionText: the question to send to the supplier about this issue.",NONE
+"14. AIAssisted: yes/no; whether the question started from an AI draft.",NONE
+"Supplier Address: an address of a supplier as stored in SAP S/4HANA.",NONE
+"Use exactly these field names, because they match the SAP S/4HANA Business Partner API (A_BusinessPartnerAddress); later the data will be read from that API.",NONE
+"Each data issue belongs to one supplier address.",NONE
+"1. BusinessPartner: key together with AddressID.",NONE
+"2. AddressID: key together with BusinessPartner.",NONE
+"3. StreetName",NONE
+"4. HouseNumber",NONE
+"5. PostalCode",NONE
+"6. CityName",NONE
+"7. Country: two-letter ISO country code.",NONE
+"Sample data: fictional only.",NONE
+"About 6 supplier addresses in DE, FR, NL, ES, US and JP, and about 12 data issues on them, for example postal codes in the wrong format for their country, a missing street and a missing house number.",NONE
+"Use every status and every severity at least once, and include one False Alarm with its reason.",NONE
+"Acceptance criteria",NONE
+"1.",NONE
+"Given I am logged in as a data steward, when I open the app, then I see a list of data issues showing BusinessPartner, FieldName, RuleID, Severity, Status, Owner and LastCheckedAt, and I can filter by Status, Severity, Owner, RuleID and the Country of the address.",LIST_REPORT_DATAISSUES
+"2.",NONE
+"Given I select an issue, when its detail page opens, then I see the issue, the supplier address and the question to the supplier in separate tabs.",OBJECT_PAGE_DATAISSUES
+"3.",NONE
+"Given an issue has no owner, when someone sets its status to In Progress, then the change is refused with a message asking for an owner.",OBJECT_PAGE_DATAISSUES
+"4.",NONE
+"Given I set an issue to False Alarm, when the reason is empty, then it is not saved and I am asked for a reason.",OBJECT_PAGE_DATAISSUES
+"5.",NONE
+"Given an issue is open, when a user tries to set the status to Fixed by hand, then it is refused; only a Recheck that finds the field now passes its rule may set Fixed.",OBJECT_PAGE_DATAISSUES
+"6.",NONE
+"Given I import a findings table, when an issue with the same BusinessPartner, AddressID, FieldName and RuleID already exists, then that issue is updated and not created twice.",NONE
+"The issue details will be:",NONE
+"Field Name | Tab in App | Section or Field Group",NONE
+"IssueID | Issue | Issue Details",OBJECT_PAGE_DATAISSUES
+"BusinessPartner | Issue | Issue Details",OBJECT_PAGE_DATAISSUES
+"AddressID | Issue | Issue Details",OBJECT_PAGE_DATAISSUES
+"FieldName | Issue | Issue Details",OBJECT_PAGE_DATAISSUES
+"RuleID | Issue | Rule",OBJECT_PAGE_DATAISSUES
+"RuleDescription | Issue | Rule",OBJECT_PAGE_DATAISSUES
+"Severity | Issue | Status and Owner",OBJECT_PAGE_DATAISSUES
+"Status | Issue | Status and Owner",OBJECT_PAGE_DATAISSUES
+"Owner | Issue | Status and Owner",OBJECT_PAGE_DATAISSUES
+"FalseAlarmReason | Issue | Status and Owner",OBJECT_PAGE_DATAISSUES
+"CurrentValue | Issue | Last Check",OBJECT_PAGE_DATAISSUES
+"LastCheckedAt | Issue | Last Check",OBJECT_PAGE_DATAISSUES
+"StreetName | Address in S/4HANA | Address",OBJECT_PAGE_DATAISSUES
+"HouseNumber | Address in S/4HANA | Address",OBJECT_PAGE_DATAISSUES
+"PostalCode | Address in S/4HANA | Address",OBJECT_PAGE_DATAISSUES
+"CityName | Address in S/4HANA | Address",OBJECT_PAGE_DATAISSUES
+"Country | Address in S/4HANA | Address",OBJECT_PAGE_DATAISSUES
+"QuestionText | Question to Supplier | Question",OBJECT_PAGE_DATAISSUES
+```
+2026-11-09T23:38:06.730Z [info] Step "loopOverPages": looping over 2 entries
+"
+2026-11-09T23:38:06.730Z [info] Step "loopOverPages" index 0: pageType=ListReport, entityType=DataIssues
+2026-11-09T23:38:06.730Z [info] Step "ifListReportPage": case 0 passed! Evaluation details:
+ - Variable "pageType" : "ListReport"
+2026-11-09T23:38:08.475Z [info] 
+==========LLM call for step "extractListReport":==========
+A Fiori Elements Application has the following pages:
+ - ListReport page for "DataIssues"
+ - ObjectPage for "DataIssues"
+
+Available entities with their associations and elements are:
+Entity "DataIssues"
+   Properties:
+       issueID: Unique identifier of the data issue
+       businessPartner: Supplier number in SAP S/4HANA
+       addressID: Number of the supplier's address
+       fieldName: Address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country
+       ruleID: Short code of the check rule, e.g. POSTAL_FORMAT or STREET_MISSING
+       ruleDescription: Description of what the rule checks, in one sentence
+       severity: Severity level: High, Medium or Low
+       status: Status of the issue: Open, In Progress, Fixed or False Alarm
+       owner: User responsible for the issue
+       currentValue: Value of the field at the last check
+       lastCheckedAt: Date and time of the last check
+       falseAlarmReason: Free text reason required when status is False Alarm
+       questionText: Question to send to the supplier about this issue
+       aiAssisted: Whether the question started from an AI draft (yes/no)
+   Associations:
+       SupplierAddresses: association to single entity SupplierAddresses
+Entity "SupplierAddresses"
+   Properties:
+       businessPartner: Supplier number in SAP S/4HANA, key together with AddressID
+       addressID: Number of the supplier's address, key together with BusinessPartner
+       streetName: Street name as stored in SAP S/4HANA Business Partner API
+       houseNumber: House number as stored in SAP S/4HANA Business Partner API
+       postalCode: Postal code as stored in SAP S/4HANA Business Partner API
+       cityName: City name as stored in SAP S/4HANA Business Partner API
+       country: Two-letter ISO country code as stored in SAP S/4HANA Business Partner API
+   Associations:
+       DataIssues: association to many entities DataIssues
+
+The user input below describes the details of the ListReport page (i.e. its filters, tables or views with their columns).
+
+Your task is to help the user defining the ListReport page.
+
+You must format your output as a JSON value that adheres to a given "JSON Schema" instance.
+
+"JSON Schema" is a declarative language that allows you to annotate and validate JSON documents.
+
+For example, the example "JSON Schema" instance {{"properties": {{"foo": {{"description": "a list of test words", "type": "array", "items": {{"type": "string"}}}}}}, "required": ["foo"]}}
+would match an object with one required property, "foo". The "type" property specifies "foo" must be an "array", and the "description" property semantically describes it as "a list of test words". The items within "foo" must be strings.
+Thus, the object {{"foo": ["bar", "baz"]}} is a well-formatted instance of this example "JSON Schema". The object {{"properties": {{"foo": ["bar", "baz"]}}}} is not well-formatted.
+
+Your output will be parsed and type-checked according to the provided schema instance, so make sure all fields in your output match the schema exactly and there are no trailing commas!
+
+Here is the JSON Schema instance your output must adhere to. Include the enclosing markdown codeblock:
+```json
+{
+  "type": "object",
+  "properties": {
+    "loadDataOnAppLaunch": {
+      "type": "string",
+      "enum": [
+        "Auto",
+        "Disabled",
+        "Enabled"
+      ],
+      "description": "'Auto': no explicit user input to load the data after start or an explicit user input to set InitialLoad for table to Auto; 'Disabled': An initial load of data does not occur at app start and the user has to actively click the Go button;  'Enabled': An initial load of data occurs automatically after start  (list is visible without pressing the GO Button)."
+    },
+    "tables": {
+      "type": "array",
+      "description": "tables (views) expected in user input",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "baseEntityType": {
+            "type": "string",
+            "description": "base entity type for the table"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "propertyPaths for columns"
+          }
+        },
+        "required": [
+          "title",
+          "baseEntityType",
+          "columns"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "filters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "propertyPaths for filters specified in user input. If not specified, empty array"
+    }
+  },
+  "required": [
+    "tables"
+  ],
+  "additionalProperties": false
+}
+```
+
+Output ONLY the json contents and try to be as accurate as comprehensive as possible.
+
+<UserInput>
+Build an SAP Fiori elements application for the following business requirements.
+Description
+"As a supplier master data steward, I want a work list of data issues found in supplier addresses, so that each issue gets an owner, is checked against SAP S/4HANA and is closed only when the data is really correct."
+Entities
+Data Issue: one problem found in one field of one supplier address by one check rule.
+"The combination of BusinessPartner, AddressID, FieldName and RuleID is unique."
+1. IssueID: unique identifier.
+2. BusinessPartner: supplier number in SAP S/4HANA (text).
+3. AddressID: number of the supplier's address (text).
+4.
+"FieldName: the address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country."
+"5. RuleID: short code of the check rule, for example POSTAL_FORMAT or STREET_MISSING."
+"6. RuleDescription: what the rule checks, in one sentence."
+"7. Severity: High, Medium or Low."
+"8. Status: Open, In Progress, Fixed or False Alarm. New issues start as Open."
+9. Owner: user responsible for the issue.
+10. CurrentValue: the value of the field at the last check.
+11. LastCheckedAt: date and time of the last check.
+12. FalseAlarmReason: free text; required when the status is False Alarm.
+13. QuestionText: the question to send to the supplier about this issue.
+14. AIAssisted: yes/no; whether the question started from an AI draft.
+Supplier Address: an address of a supplier as stored in SAP S/4HANA.
+"Use exactly these field names, because they match the SAP S/4HANA Business Partner API (A_BusinessPartnerAddress); later the data will be read from that API."
+Each data issue belongs to one supplier address.
+1. BusinessPartner: key together with AddressID.
+2. AddressID: key together with BusinessPartner.
+3. StreetName
+4. HouseNumber
+5. PostalCode
+6. CityName
+7. Country: two-letter ISO country code.
+Sample data: fictional only.
+"About 6 supplier addresses in DE, FR, NL, ES, US and JP, and about 12 data issues on them, for example postal codes in the wrong format for their country, a missing street and a missing house number."
+"Use every status and every severity at least once, and include one False Alarm with its reason."
+Acceptance criteria
+1.
+"Given I am logged in as a data steward, when I open the app, then I see a list of data issues showing BusinessPartner, FieldName, RuleID, Severity, Status, Owner and LastCheckedAt, and I can filter by Status, Severity, Owner, RuleID and the Country of the address."
+2.
+</UserInput>
+
+----------Response:----------
+```json
+{
+  "loadDataOnAppLaunch": "Enabled",
+  "filters": [
+    "status",
+    "severity",
+    "owner",
+    "ruleID",
+    "SupplierAddresses/country"
+  ],
+  "tables": [
+    {
+      "title": "Data Issues",
+      "id": "DataIssuesTable",
+      "baseEntityType": "DataIssues",
+      "columns": [
+        "businessPartner",
+        "fieldName",
+        "ruleID",
+        "severity",
+        "status",
+        "owner",
+        "lastCheckedAt"
+      ]
+    }
+  ]
+}
+```
+2026-11-09T23:38:08.476Z [info] Step "loopOverPages" index 1: pageType=ObjectPage, entityType=DataIssues
+2026-11-09T23:38:08.476Z [info] Step "ifListReportPage": case 0 blocked! Evaluation details:
+ - Variable "pageType" : "ObjectPage"
+2026-11-09T23:38:08.476Z [info] Step "ifListReportPage": no condition met - running default steps
+2026-11-09T23:38:11.860Z [info] 
+==========LLM call for step "extractSingleObjectPageOfMany":==========
+The user input below describes a Fiori Elements Application with the following pages:
+ - ListReport page for "DataIssues"
+ - ObjectPage for "DataIssues"
+
+Your task is to find the details of the ObjectPage for "DataIssues".
+The base entity of the ObjectPage is DataIssues.
+This ObjectPage can contain tabs and/or sections which in turn contain tables and fields.
+
+The underlying data model allows the following propertyPaths:
+ - issueID: Issue ID (of Issue)
+ - businessPartner: Business Partner (of Issue)
+ - addressID: Address ID (of Issue)
+ - fieldName: Field Name (of Issue)
+ - ruleID: Rule ID (of Issue)
+ - ruleDescription: Rule Description (of Issue)
+ - severity: Severity (of Issue)
+ - status: Status (of Issue)
+ - owner: Owner (of Issue)
+ - currentValue: Current Value (of Issue)
+ - lastCheckedAt: Last Checked At (of Issue)
+ - falseAlarmReason: False Alarm Reason (of Issue)
+ - questionText: Question Text (of Issue)
+ - aiAssisted: Ai Assisted (of Issue)
+ - SupplierAddresses/businessPartner: Business Partner (of single associated Address)
+ - SupplierAddresses/addressID: Address ID (of single associated Address)
+ - SupplierAddresses/streetName: Street Name (of single associated Address)
+ - SupplierAddresses/houseNumber: House Number (of single associated Address)
+ - SupplierAddresses/postalCode: Postal Code (of single associated Address)
+ - SupplierAddresses/cityName: City Name (of single associated Address)
+ - SupplierAddresses/country: Country (of single associated Address)
+
+You must format your output as a JSON value that adheres to a given "JSON Schema" instance.
+
+"JSON Schema" is a declarative language that allows you to annotate and validate JSON documents.
+
+For example, the example "JSON Schema" instance {{"properties": {{"foo": {{"description": "a list of test words", "type": "array", "items": {{"type": "string"}}}}}}, "required": ["foo"]}}
+would match an object with one required property, "foo". The "type" property specifies "foo" must be an "array", and the "description" property semantically describes it as "a list of test words". The items within "foo" must be strings.
+Thus, the object {{"foo": ["bar", "baz"]}} is a well-formatted instance of this example "JSON Schema". The object {{"properties": {{"foo": ["bar", "baz"]}}}} is not well-formatted.
+
+Your output will be parsed and type-checked according to the provided schema instance, so make sure all fields in your output match the schema exactly and there are no trailing commas!
+
+Here is the JSON Schema instance your output must adhere to. Include the enclosing markdown codeblock:
+```json
+{
+  "type": "object",
+  "properties": {
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "isTableSection": {
+            "type": "boolean",
+            "description": "if true, 'fields' represent columns of the table section and propertyPaths need to start with 1:n association"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "propertyPath"
+          }
+        },
+        "required": [
+          "title",
+          "id",
+          "fields"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "tabs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "subsections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "list of sections ids relevant for the tab"
+          }
+        },
+        "required": [
+          "title",
+          "id",
+          "subsections"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "sections",
+    "tabs"
+  ],
+  "additionalProperties": false
+}
+```
+
+Output ONLY the json contents and try to be as accurate as comprehensive as possible.
+
+<UserInput>
+"As an accounts payable clerk, I want to see the issues of a supplier and mark false alarms with a reason, so that real problems get fixed and false ones stop slowing down payments."
+Entities
+Data Issue: one problem found in one field of one supplier address by one check rule.
+"The combination of BusinessPartner, AddressID, FieldName and RuleID is unique."
+1. IssueID: unique identifier.
+2. BusinessPartner: supplier number in SAP S/4HANA (text).
+3. AddressID: number of the supplier's address (text).
+4.
+"FieldName: the address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country."
+"5. RuleID: short code of the check rule, for example POSTAL_FORMAT or STREET_MISSING."
+"6. RuleDescription: what the rule checks, in one sentence."
+"7. Severity: High, Medium or Low."
+"8. Status: Open, In Progress, Fixed or False Alarm. New issues start as Open."
+9. Owner: user responsible for the issue.
+10. CurrentValue: the value of the field at the last check.
+11. LastCheckedAt: date and time of the last check.
+12. FalseAlarmReason: free text; required when the status is False Alarm.
+13. QuestionText: the question to send to the supplier about this issue.
+14. AIAssisted: yes/no; whether the question started from an AI draft.
+Supplier Address: an address of a supplier as stored in SAP S/4HANA.
+"Use exactly these field names, because they match the SAP S/4HANA Business Partner API (A_BusinessPartnerAddress); later the data will be read from that API."
+Each data issue belongs to one supplier address.
+1. BusinessPartner: key together with AddressID.
+2. AddressID: key together with BusinessPartner.
+3. StreetName
+4. HouseNumber
+5. PostalCode
+6. CityName
+7. Country: two-letter ISO country code.
+Sample data: fictional only.
+"About 6 supplier addresses in DE, FR, NL, ES, US and JP, and about 12 data issues on them, for example postal codes in the wrong format for their country, a missing street and a missing house number."
+"Use every status and every severity at least once, and include one False Alarm with its reason."
+Acceptance criteria
+1.
+"Given I select an issue, when its detail page opens, then I see the issue, the supplier address and the question to the supplier in separate tabs."
+3.
+"Given an issue has no owner, when someone sets its status to In Progress, then the change is refused with a message asking for an owner."
+4.
+"Given I set an issue to False Alarm, when the reason is empty, then it is not saved and I am asked for a reason."
+5.
+"Given an issue is open, when a user tries to set the status to Fixed by hand, then it is refused; only a Recheck that finds the field now passes its rule may set Fixed."
+6.
+"Given I import a findings table, when an issue with the same BusinessPartner, AddressID, FieldName and RuleID already exists, then that issue is updated and not created twice."
+The issue details will be:
+Field Name | Tab in App | Section or Field Group
+IssueID | Issue | Issue Details
+BusinessPartner | Issue | Issue Details
+AddressID | Issue | Issue Details
+FieldName | Issue | Issue Details
+RuleID | Issue | Rule
+RuleDescription | Issue | Rule
+Severity | Issue | Status and Owner
+Status | Issue | Status and Owner
+Owner | Issue | Status and Owner
+FalseAlarmReason | Issue | Status and Owner
+CurrentValue | Issue | Last Check
+LastCheckedAt | Issue | Last Check
+StreetName | Address in S/4HANA | Address
+HouseNumber | Address in S/4HANA | Address
+PostalCode | Address in S/4HANA | Address
+CityName | Address in S/4HANA | Address
+Country | Address in S/4HANA | Address
+QuestionText | Question to Supplier | Question
+</UserInput>
+
+----------Response:----------
+```json
+{
+  "sections": [
+    {
+      "title": "Issue Details",
+      "id": "issueDetails",
+      "fields": [
+        "issueID",
+        "businessPartner",
+        "addressID",
+        "fieldName"
+      ]
+    },
+    {
+      "title": "Rule",
+      "id": "rule",
+      "fields": [
+        "ruleID",
+        "ruleDescription"
+      ]
+    },
+    {
+      "title": "Status and Owner",
+      "id": "statusAndOwner",
+      "fields": [
+        "severity",
+        "status",
+        "owner",
+        "falseAlarmReason"
+      ]
+    },
+    {
+      "title": "Last Check",
+      "id": "lastCheck",
+      "fields": [
+        "currentValue",
+        "lastCheckedAt"
+      ]
+    },
+    {
+      "title": "Address",
+      "id": "address",
+      "fields": [
+        "SupplierAddresses/streetName",
+        "SupplierAddresses/houseNumber",
+        "SupplierAddresses/postalCode",
+        "SupplierAddresses/cityName",
+        "SupplierAddresses/country"
+      ]
+    },
+    {
+      "title": "Question",
+      "id": "question",
+      "fields": [
+        "questionText",
+        "aiAssisted"
+      ]
+    }
+  ],
+  "tabs": [
+    {
+      "title": "Issue",
+      "id": "issue",
+      "subsections": [
+        "issueDetails",
+        "rule",
+        "statusAndOwner",
+        "lastCheck"
+      ]
+    },
+    {
+      "title": "Address in S/4HANA",
+      "id": "addressTab",
+      "subsections": [
+        "address"
+      ]
+    },
+    {
+      "title": "Question to Supplier",
+      "id": "questionTab",
+      "subsections": [
+        "question"
+      ]
+    }
+  ]
+}
+```
+2026-11-09T23:38:11.861Z [info] Step "ifCodeListsPresent": case 0 blocked! Evaluation details:
+ - JSONPath "$.model.entities[*].elements[*].values[*]" : []
+2026-11-09T23:38:11.863Z [info] 2/8: Build CDS files
+2026-11-09T23:38:11.890Z [info] 3/8: Checking staging project root folder "&#x2F;home&#x2F;user&#x2F;projects&#x2F;ai-created-cap"
+2026-11-09T23:38:11.891Z [info] 4/8: Generating mock data
+2026-11-09T23:38:20.593Z [info] 
+==========LLM call for data generation:==========
+
+For the following list of entities, create data for the empty CSV files.
+Entity "SupplierAddresses" - Properties:
+    businessPartner: String(20), Supplier number in SAP S/4HANA, key together with AddressID
+    addressID: String(10), Number of the supplier's address, key together with BusinessPartner
+    streetName: String(100), Street name as stored in SAP S/4HANA Business Partner API
+    houseNumber: String(20), House number as stored in SAP S/4HANA Business Partner API
+    postalCode: String(20), Postal code as stored in SAP S/4HANA Business Partner API
+    cityName: String(50), City name as stored in SAP S/4HANA Business Partner API
+    country: String(2), Two-letter ISO country code as stored in SAP S/4HANA Business Partner API
+
+Entity "DataIssues" - Properties:
+    issueID: String(50), Unique identifier of the data issue
+    businessPartner: String(20), Supplier number in SAP S/4HANA
+    addressID: String(10), Number of the supplier's address
+    fieldName: String(20), Address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country
+    ruleID: String(30), Short code of the check rule, e.g. POSTAL_FORMAT or STREET_MISSING
+    ruleDescription: String(200), Description of what the rule checks, in one sentence
+    severity: String(10), Severity level: High, Medium or Low
+    status: String(20), Status of the issue: Open, In Progress, Fixed or False Alarm
+    owner: String(50), User responsible for the issue
+    currentValue: String(100), Value of the field at the last check
+    lastCheckedAt: DateTime, Date and time of the last check
+    falseAlarmReason: String(200), Free text reason required when status is False Alarm
+    questionText: String(255), Question to send to the supplier about this issue
+    aiAssisted: Boolean, Whether the question started from an AI draft (yes/no)
+    SupplierAddresses_businessPartner: String(20), businessPartner of associated SupplierAddresses
+
+Empty CSV files in json format (only generate content for these files!):
+{"SupplierAddresses.csv":"businessPartner;addressID;streetName;houseNumber;postalCode;cityName;country","DataIssues.csv":"issueID;businessPartner;addressID;fieldName;ruleID;ruleDescription;severity;status;owner;currentValue;lastCheckedAt;falseAlarmReason;questionText;aiAssisted;SupplierAddresses_businessPartner"}
+
+Rules:
+    - Take over the given header line, do not invent new columns!
+    - For a given file, add rows, add '\n' characters before each row but don't break the JSON string
+    - Do not generate rows with same key values, they must be unique!
+    - Make sure that associations match, i.e. a field containing "Name of the associated Customer" must contain an existing Name of entity Customer
+    - Always use ";" as a delimiter in CSV files
+    - The result must be proper JSON format so it can be parsed, don't break JSON strings within, don't add quotes around values.
+    - Create exactly 10 rows (data records) for EACH csv file (do NOT count the header line as a row)
+    - All values must be realistic with meaningful content, e.g. 'Laptop Screen' and not just placeholder values with incremented numbers like 'Product 1', 'Product 2' etc.
+
+Use format for values:
+  String(50): string no longer than 50 characters
+  DateTime: 2021-06-27T14:52:23Z
+  Boolean: true or false
+
+
+Example output (Do NOT include in output!):
+```json
+{"Blogs":"blogID;title;description;createdDateTime;views\nBlog1;Tech Blog;A blog about the latest technology trends.;2023-06-27T14:52:23Z;1000\nBlog2;Fashion Blog;Explore the world of fashion and style.;2023-06-27T14:52:23Z;500","Posts":"postID;title;content;publishDate;likes;comments;blogID\n1;The Future of Artificial Intelligence;Artificial intelligence is shaping the future of technology.;2023-06-27;50;10;Blog1
+2;Summer Fashion Trends;Discover the hottest fashion trends for the summer season.;2023-06-27;100;20;Blog2\n3;Must-Have Accessories;10 must-have accessories for the upcoming season;2023-06-27;100;20;Blog2"}
+```
+Output ONLY the json contents for the csv files and try to be as accurate as possible.
+
+
+
+----------Response:----------
+```json
+{"SupplierAddresses.csv":"businessPartner;addressID;streetName;houseNumber;postalCode;cityName;country\nSUPP0000001;ADDR001;Baker Street;221B;NW1 6XE;London;GB\nSUPP0000002;ADDR002;Fifth Avenue;711;10022;New York;US\nSUPP0000003;ADDR003;Champs-Élysées;50;75008;Paris;FR\nSUPP0000004;ADDR004;Kurfürstendamm;45;10719;Berlin;DE\nSUPP0000005;ADDR005;Via Roma;12;00184;Rome;IT\nSUPP0000006;ADDR006;Queen Street;100;M5H 2N2;Toronto;CA\nSUPP0000007;ADDR007;Orchard Road;238;238;Singapore;SG\nSUPP0000008;ADDR008;Lombard Street;10;94111;San Francisco;US\nSUPP0000009;ADDR009;Paseo de la Reforma;305;06600;Mexico City;MX\nSUPP0000010;ADDR010;Sukhumvit Road;88;10110;Bangkok;TH","DataIssues.csv":"issueID;businessPartner;addressID;fieldName;ruleID;ruleDescription;severity;status;owner;currentValue;lastCheckedAt;falseAlarmReason;questionText;aiAssisted;SupplierAddresses_businessPartner\nISSUE0001;SUPP0000001;ADDR001;postalCode;POSTAL_FORMAT;Checks if the postal code matches the country format;High;Open;anna.smith;NW1 6X;2024-05-15T09:30:00Z;;Could you please confirm the correct postal code for your address?;true;SUPP0000001\nISSUE0002;SUPP0000002;ADDR002;streetName;STREET_MISSING;Checks if the street name is missing or empty;Medium;In Progress;john.doe; ;2024-05-14T14:20:00Z;;Can you provide the street name for your address?;false;SUPP0000002\nISSUE0003;SUPP0000003;ADDR003;houseNumber;HOUSE_NUMBER_FORMAT;Validates the house number format;Low;Fixed;maria.garcia;50A;2024-05-10T11:00:00Z;;Is the house number \"50A\" correct for your address?;true;SUPP0000003\nISSUE0004;SUPP0000004;ADDR004;cityName;CITY_NAME_CHECK;Ensures city name is spelled correctly;High;Open;li.wei;Berln;2024-05-16T08:45:00Z;;Please confirm the correct spelling of your city name.;true;SUPP0000004\nISSUE0005;SUPP0000005;ADDR005;country;COUNTRY_CODE_VALID;Checks if the country code is valid ISO 2-letter;High;False Alarm;emily.jones;IT;2024-05-12T10:15:00Z;Country code is correct per supplier confirmation;Is \"IT\" the correct country code for your address?;false;SUPP0000005\nISSUE0006;SUPP0000006;ADDR006;postalCode;POSTAL_FORMAT;Checks if the postal code matches the country format;Medium;In Progress;alex.brown;M5H 2N;2024-05-13T13:00:00Z;;Please verify the postal code for your address.;true;SUPP0000006\nISSUE0007;SUPP0000007;ADDR007;streetName;STREET_MISSING;Checks if the street name is missing or empty;High;Open;nguyen.thi;Orchard Rd;2024-05-15T16:30:00Z;;Is \"Orchard Rd\" the correct street name?;true;SUPP0000007\nISSUE0008;SUPP0000008;ADDR008;houseNumber;HOUSE_NUMBER_FORMAT;Validates the house number format;Low;Fixed;oliver.martin;10;2024-05-11T09:00:00Z;;Please confirm the house number \"10\" is accurate.;false;SUPP0000008\nISSUE0009;SUPP0000009;ADDR009;cityName;CITY_NAME_CHECK;Ensures city name is spelled correctly;Medium;Open;sofia.lopez;Mexico City;2024-05-14T12:00:00Z;;Can you confirm the city name for your address?;true;SUPP0000009\nISSUE0010;SUPP0000010;ADDR010;country;COUNTRY_CODE_VALID;Checks if the country code is valid ISO 2-letter;High;Open;chaiwat.s;TH;2024-05-16T07:30:00Z;;Is \"TH\" the correct country code for your address?;true;SUPP0000010"}
+```
+2026-11-09T23:38:20.596Z [info] 5/8: Initializing CAP project
+2026-11-09T23:38:21.329Z [info] 6/8: Copying files to CAP project
+2026-11-09T23:38:21.331Z [info] 7/8: Generating applications
+2026-11-09T23:38:39.038Z [info] 8/8: Installing node module dependencies

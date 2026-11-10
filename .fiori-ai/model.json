@@ -1,0 +1,347 @@
+{
+    "namespace": "supplierDataIssues",
+    "entities": [
+        {
+            "name": "DataIssues",
+            "label": "Issue",
+            "labelPlural": "Issues",
+            "associations": [
+                {
+                    "name": "SupplierAddresses",
+                    "target": "SupplierAddresses",
+                    "multiplicity": "one"
+                }
+            ],
+            "elements": [
+                {
+                    "name": "ID",
+                    "type": "UUID",
+                    "key": true,
+                    "label": ""
+                },
+                {
+                    "name": "issueID",
+                    "type": "String(50)",
+                    "label": "Issue ID",
+                    "additionalInfo": "Unique identifier of the data issue",
+                    "essentialElement": true,
+                    "semanticKey": true
+                },
+                {
+                    "name": "businessPartner",
+                    "type": "String(20)",
+                    "label": "Business Partner",
+                    "additionalInfo": "Supplier number in SAP S/4HANA",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "addressID",
+                    "type": "String(10)",
+                    "label": "Address ID",
+                    "additionalInfo": "Number of the supplier's address",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "fieldName",
+                    "type": "String(20)",
+                    "label": "Field Name",
+                    "additionalInfo": "Address field with the problem: StreetName, HouseNumber, PostalCode, CityName or Country",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "ruleID",
+                    "type": "String(30)",
+                    "label": "Rule ID",
+                    "additionalInfo": "Short code of the check rule, e.g. POSTAL_FORMAT or STREET_MISSING",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "ruleDescription",
+                    "type": "String(200)",
+                    "label": "Rule Description",
+                    "additionalInfo": "Description of what the rule checks, in one sentence",
+                    "key": false,
+                    "essentialElement": false
+                },
+                {
+                    "name": "severity",
+                    "type": "String(10)",
+                    "label": "Severity",
+                    "additionalInfo": "Severity level: High, Medium or Low",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "status",
+                    "type": "String(20)",
+                    "label": "Status",
+                    "additionalInfo": "Status of the issue: Open, In Progress, Fixed or False Alarm",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "owner",
+                    "type": "String(50)",
+                    "label": "Owner",
+                    "additionalInfo": "User responsible for the issue",
+                    "key": false,
+                    "essentialElement": false
+                },
+                {
+                    "name": "currentValue",
+                    "type": "String(100)",
+                    "label": "Current Value",
+                    "additionalInfo": "Value of the field at the last check",
+                    "key": false,
+                    "essentialElement": false
+                },
+                {
+                    "name": "lastCheckedAt",
+                    "type": "DateTime",
+                    "label": "Last Checked At",
+                    "additionalInfo": "Date and time of the last check",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "falseAlarmReason",
+                    "type": "String(200)",
+                    "label": "False Alarm Reason",
+                    "additionalInfo": "Free text reason required when status is False Alarm",
+                    "key": false,
+                    "essentialElement": false
+                },
+                {
+                    "name": "questionText",
+                    "type": "String(255)",
+                    "label": "Question Text",
+                    "additionalInfo": "Question to send to the supplier about this issue",
+                    "key": false,
+                    "essentialElement": false
+                },
+                {
+                    "name": "aiAssisted",
+                    "type": "Boolean",
+                    "label": "Ai Assisted",
+                    "additionalInfo": "Whether the question started from an AI draft (yes/no)",
+                    "key": false,
+                    "essentialElement": false
+                }
+            ]
+        },
+        {
+            "name": "SupplierAddresses",
+            "label": "Address",
+            "labelPlural": "Addresses",
+            "associations": [
+                {
+                    "name": "DataIssues",
+                    "target": "DataIssues",
+                    "nameForReverseAssociation": "SupplierAddresses",
+                    "multiplicity": "many",
+                    "backAssociation": "SupplierAddresses"
+                }
+            ],
+            "elements": [
+                {
+                    "name": "ID",
+                    "type": "UUID",
+                    "key": true,
+                    "label": ""
+                },
+                {
+                    "name": "businessPartner",
+                    "type": "String(20)",
+                    "label": "Business Partner",
+                    "additionalInfo": "Supplier number in SAP S/4HANA, key together with AddressID",
+                    "essentialElement": true,
+                    "semanticKey": true
+                },
+                {
+                    "name": "addressID",
+                    "type": "String(10)",
+                    "label": "Address ID",
+                    "additionalInfo": "Number of the supplier's address, key together with BusinessPartner",
+                    "essentialElement": true,
+                    "semanticKey": true
+                },
+                {
+                    "name": "streetName",
+                    "type": "String(100)",
+                    "label": "Street Name",
+                    "additionalInfo": "Street name as stored in SAP S/4HANA Business Partner API",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "houseNumber",
+                    "type": "String(20)",
+                    "label": "House Number",
+                    "additionalInfo": "House number as stored in SAP S/4HANA Business Partner API",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "postalCode",
+                    "type": "String(20)",
+                    "label": "Postal Code",
+                    "additionalInfo": "Postal code as stored in SAP S/4HANA Business Partner API",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "cityName",
+                    "type": "String(50)",
+                    "label": "City Name",
+                    "additionalInfo": "City name as stored in SAP S/4HANA Business Partner API",
+                    "key": false,
+                    "essentialElement": true
+                },
+                {
+                    "name": "country",
+                    "type": "String(2)",
+                    "label": "Country",
+                    "additionalInfo": "Two-letter ISO country code as stored in SAP S/4HANA Business Partner API",
+                    "key": false,
+                    "essentialElement": true
+                }
+            ]
+        }
+    ],
+    "service": {
+        "name": "supplierDataIssuesSrv",
+        "path": "srv/service.cds"
+    },
+    "applications": [
+        {
+            "pages": [
+                {
+                    "type": "ListReport",
+                    "entityType": "DataIssues",
+                    "listReportContent": {
+                        "loadDataOnAppLaunch": "Enabled",
+                        "filters": [
+                            "status",
+                            "severity",
+                            "owner",
+                            "ruleID",
+                            "SupplierAddresses/country"
+                        ],
+                        "tables": [
+                            {
+                                "title": "Data Issues",
+                                "id": "DataIssuesTable",
+                                "baseEntityType": "DataIssues",
+                                "columns": [
+                                    "businessPartner",
+                                    "fieldName",
+                                    "ruleID",
+                                    "severity",
+                                    "status",
+                                    "owner",
+                                    "lastCheckedAt"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "ObjectPage",
+                    "entityType": "DataIssues",
+                    "objectPageContent": {
+                        "tableSectionAssociations": [],
+                        "sections": [
+                            {
+                                "title": "Issue Details",
+                                "id": "issueDetails",
+                                "fields": [
+                                    "issueID",
+                                    "businessPartner",
+                                    "addressID",
+                                    "fieldName"
+                                ]
+                            },
+                            {
+                                "title": "Rule",
+                                "id": "rule",
+                                "fields": [
+                                    "ruleID",
+                                    "ruleDescription"
+                                ]
+                            },
+                            {
+                                "title": "Status and Owner",
+                                "id": "statusAndOwner",
+                                "fields": [
+                                    "severity",
+                                    "status",
+                                    "owner",
+                                    "falseAlarmReason"
+                                ]
+                            },
+                            {
+                                "title": "Last Check",
+                                "id": "lastCheck",
+                                "fields": [
+                                    "currentValue",
+                                    "lastCheckedAt"
+                                ]
+                            },
+                            {
+                                "title": "Address",
+                                "id": "address",
+                                "fields": [
+                                    "SupplierAddresses/streetName",
+                                    "SupplierAddresses/houseNumber",
+                                    "SupplierAddresses/postalCode",
+                                    "SupplierAddresses/cityName",
+                                    "SupplierAddresses/country"
+                                ]
+                            },
+                            {
+                                "title": "Question",
+                                "id": "question",
+                                "fields": [
+                                    "questionText",
+                                    "aiAssisted"
+                                ]
+                            }
+                        ],
+                        "tabs": [
+                            {
+                                "id": "issue",
+                                "title": "Issue",
+                                "subsections": [
+                                    "issueDetails",
+                                    "rule",
+                                    "statusAndOwner",
+                                    "lastCheck"
+                                ]
+                            },
+                            {
+                                "id": "addressTab",
+                                "title": "Address in S/4HANA",
+                                "subsections": [
+                                    "address"
+                                ]
+                            },
+                            {
+                                "id": "questionTab",
+                                "title": "Question to Supplier",
+                                "subsections": [
+                                    "question"
+                                ]
+                            }
+                        ],
+                        "chartSections": []
+                    }
+                }
+            ],
+            "name": "supplierDataIssuesApp"
+        }
+    ]
+}
