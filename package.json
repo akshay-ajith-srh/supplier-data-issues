@@ -14,7 +14,8 @@
   },
   "scripts": {
     "start": "cds-serve",
-    "watch-supplierdataissuesapp": "cds watch --open supplierdataissuesapp/index.html?sap-ui-xx-viewCache=false --livereload false"
+    "watch-supplierdataissuesapp": "cds watch --open supplierdataissuesapp/index.html?sap-ui-xx-viewCache=false --livereload false",
+    "test": "node --test test/issues.test.js"
   },
   "private": true,
   "workspaces": [
